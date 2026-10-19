@@ -36,6 +36,7 @@ Node* createNode (char* name, int server, time_t banTime) {
     node->servers = malloc(node->serverCap * sizeof(int));
     if(node->servers == NULL) {
         fprintf(stderr, "Error: Failed to malloc for server array when creating new node\n");
+        free(node);
         return 0;
     }
     node->servers[0] = server;
@@ -71,8 +72,8 @@ Node* buildTree(int n, Node* x) {
         return x;
     }
 
-    Node* r = buildTree(ceil((n-1)/2), x);
-    Node* s = buildTree(floor((n-1)/2), r->right);
+    Node* r = buildTree(n/2, x);
+    Node* s = buildTree((n-1)/2, r->right);
     r->right = s->left;
     s->left = r;
     return s;
@@ -82,14 +83,16 @@ Node* rebuildTree(int n, Node* scapegoat) {
     // takes in input a pointer scapegoat to root of subtree to be rebuilt and size n of tree
     // returns root of subtree
     // rebuilt subtree is 1/2-weight-balanced
-    Node* w = createNode(NULL, NULL, NULL);
+    Node w = {0};
 
-    Node* z = flatten(scapegoat, w);
+    Node* z = flatten(scapegoat, &w);
     buildTree(n, z);
-    return w->left;
+
+    return w.left;
 }
 
-Node* insert(Node* root, char* name, int server, time_t banTime) {
+Node* insert(Tree* tree, char* name, int server, time_t banTime) {
+    Node* root = tree->root;
     if(root == NULL) {
         root = createNode(name, server, banTime);
         return root;
@@ -101,50 +104,86 @@ Node* insert(Node* root, char* name, int server, time_t banTime) {
             pointer = pointer->left;
         } else if(pointer->left == NULL && strcmp(name, pointer->name) < 0) {
             pointer->left = createNode(name, server, banTime);
+            tree->n++;
+            tree->q++;
             return root;
         } else if(pointer->right != NULL && strcmp(name, pointer->name) > 0) {
             pointer = pointer->right;
         } else if(pointer->right == NULL && strcmp(name, pointer->name)> 0) {
             pointer->right = createNode(name, server, banTime);
+            tree->n++;
+            tree->q++;
             return root;
         } else if(strcmp(name, pointer->name) == 0) {
             if(banTime > pointer->lastBan) {
                 pointer->lastBan = banTime;
             }
 
-            for(int i = 0; i < pointer->serverCap; i++) {
-                if (pointer->servers[i] == NULL) {
-                    pointer->servers[i] = server;
-                    pointer->banCount++;
-                    return root;
-                } else if (pointer->servers[i] == server) {
+            for(int i = 0; i < pointer->banCount; i++) {
+                if (pointer->servers[i] == server) {
                     return root;
                 }
             }
 
-            int newCap = pointer->serverCap * 2;
-            int* temp = realloc(pointer->servers, newCap * sizeof(int));
+            if (pointer->banCount == pointer->serverCap) {
+                int newCap = pointer->serverCap * 2;
+                int* temp = realloc(pointer->servers, newCap * sizeof(int));
 
-            if (temp == NULL) {
-                fprintf(stderr, "Error: Failed to realloc for server array\n");
-                exit(EXIT_FAILURE);
-            } else {
+                if (temp == NULL) {
+                    fprintf(stderr, "Error: Failed to realloc for server array\n");
+                    exit(EXIT_FAILURE);
+                }
+
                 pointer->servers = temp;
                 pointer->serverCap = newCap;
             }
+
+            pointer->servers[pointer->banCount] = server;
+            pointer->banCount++;
         }
     }
 }
 
+void freeNode(Node* node) {
+    if (node == NULL) {
+        return;
+    }
+
+    freeNode(node->left);
+    freeNode(node->right);
+
+    free(node->servers);
+    free(node);
+}
+
+void freeTree(Tree* tree) {
+    if (tree == NULL) {
+        return;
+    }
+
+    freeNode(tree->root);
+    tree->root = NULL;
+    tree->n = 0;
+    tree->q = 0;
+}
+
 int main() {
-    Node* root = createNode("Bob", NULL, NULL);
+    Node* root = createNode("Bob", 0, 0);
+    Tree* tree = malloc(sizeof(Tree));
 
-    root->left = createNode("Alice", NULL, NULL);
-    root->right = createNode("Cathy", NULL, NULL);
+    if (tree == NULL) {
+        fprintf(stderr, "Error: Failed to malloc for tree\n");
+        return EXIT_FAILURE;
+    }
 
-    printf("Tree size: %d\n", treeSize(root));
+    *tree = (Tree){root, 1, 1};
 
-    Node dummy = {NULL, NULL, NULL, NULL, NULL, NULL};
+    insert(tree, "Alice", 812, 0);
+    insert(tree, "Catchy", 890, 0);
+
+    printf("Tree size: %d\n", tree->n);
+
+    Node dummy = {0};
     Node* start = flatten(root, &dummy);
     Node* head = start;
 
@@ -160,6 +199,8 @@ int main() {
     printf("Root: %s\n", newRoot->name);
     printf("Left: %s\n", newRoot->left->name);
     printf("Right: %s\n", newRoot->right->name);
+
+    freeTree(tree);
 
     return 0;
 }
