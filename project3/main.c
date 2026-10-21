@@ -95,25 +95,84 @@ Node* insert(Tree* tree, char* name, int server, time_t banTime) {
     Node* root = tree->root;
     if(root == NULL) {
         root = createNode(name, server, banTime);
+        tree->root = root;
+        tree->n++;
+        tree->q++;
         return root;
     }
 
+    Node* history[1000];
+    int historyCount = 0;
+
     Node* pointer = root;
     for(;;) {
+        history[historyCount] = pointer;
+        historyCount++;
+
         if(pointer->left != NULL && strcmp(name, pointer->name) < 0) {
             pointer = pointer->left;
+
         } else if(pointer->left == NULL && strcmp(name, pointer->name) < 0) {
             pointer->left = createNode(name, server, banTime);
             tree->n++;
             tree->q++;
-            return root;
+
+            if (historyCount > maxDepth(tree->q)) {
+                Node* scapegoat = NULL;
+                int j = historyCount - 2;
+
+                for(j; j >= 0; j--) {
+
+                    if(treeSize(history[j + 1]) > (ALPHA * treeSize(history[j]))) {
+                        scapegoat = history[j];
+                        break;
+                    }
+                }
+                Node* rebuiltNode = rebuildTree(treeSize(scapegoat), scapegoat);
+
+                if(scapegoat != NULL && j == 0) {
+                    tree->root = rebuiltNode;
+
+                } else {
+                    if (history[j-1]->left = scapegoat) {
+                        history[j-1]->left = rebuiltNode;
+
+                    } else {
+                        history[j-1]->right = rebuiltNode;
+                    }
+                }
+            }
+            return tree->root;
+
         } else if(pointer->right != NULL && strcmp(name, pointer->name) > 0) {
             pointer = pointer->right;
+
         } else if(pointer->right == NULL && strcmp(name, pointer->name)> 0) {
             pointer->right = createNode(name, server, banTime);
             tree->n++;
             tree->q++;
-            return root;
+            if (historyCount > maxDepth(tree->q)) {
+                Node* scapegoat = NULL;
+                int j = historyCount - 2;
+                for(j; j >= 0; j--) {
+                    if(treeSize(history[j + 1]) > (ALPHA * treeSize(history[j]))) {
+                        scapegoat = history[j];
+                        break;
+                    }
+                }
+                Node* rebuiltNode = rebuildTree(treeSize(scapegoat), scapegoat);
+                if(scapegoat != NULL && j == 0) {
+                    tree->root = rebuiltNode;
+                } else {
+                    if (history[j-1]->left = scapegoat) {
+                        history[j-1]->left = rebuiltNode;
+                    } else {
+                        history[j-1]->right = rebuiltNode;
+                    }
+                }
+            }
+            return tree->root;
+
         } else if(strcmp(name, pointer->name) == 0) {
             if(banTime > pointer->lastBan) {
                 pointer->lastBan = banTime;
@@ -140,6 +199,29 @@ Node* insert(Tree* tree, char* name, int server, time_t banTime) {
 
             pointer->servers[pointer->banCount] = server;
             pointer->banCount++;
+            return tree->root;
+        }
+    }
+}
+
+Node* search(Tree* tree, char* name) {
+    Node* root = tree->root;
+    if(root == NULL) {
+        return NULL;
+    }
+
+    Node* pointer = root;
+    for(;;) {
+        if(pointer->left != NULL && strcmp(name, pointer->name) < 0) {
+            pointer = pointer->left;
+        } else if(pointer->left == NULL && strcmp(name, pointer->name) < 0) {
+            return NULL;
+        } else if(pointer->right != NULL && strcmp(name, pointer->name) > 0) {
+            pointer = pointer->right;
+        } else if(pointer->right == NULL && strcmp(name, pointer->name)> 0) {
+            return NULL;
+        } else if(strcmp(name, pointer->name) == 0) {
+            return pointer;
         }
     }
 }
@@ -165,6 +247,14 @@ void freeTree(Tree* tree) {
     tree->root = NULL;
     tree->n = 0;
     tree->q = 0;
+}
+
+int maxDepth(int q) {
+    if (q <= 1) {
+        return 0;
+    }
+    
+    return (int)floor(log(q) / log(1 / ALPHA)) + 1;
 }
 
 int main() {
