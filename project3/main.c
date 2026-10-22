@@ -91,6 +91,14 @@ Node* rebuildTree(int n, Node* scapegoat) {
     return w.left;
 }
 
+int maxDepth(int q) {
+    if (q <= 1) {
+        return 0;
+    }
+    
+    return (int)floor(log(q) / log(1 / ALPHA) + 1);
+}
+
 Node* insert(Tree* tree, char* name, int server, time_t banTime) {
     Node* root = tree->root;
     if(root == NULL) {
@@ -99,6 +107,10 @@ Node* insert(Tree* tree, char* name, int server, time_t banTime) {
         tree->n++;
         tree->q++;
         return root;
+    }
+
+    if(root == NULL) {
+        return NULL;
     }
 
     Node* history[1000];
@@ -113,32 +125,40 @@ Node* insert(Tree* tree, char* name, int server, time_t banTime) {
             pointer = pointer->left;
 
         } else if(pointer->left == NULL && strcmp(name, pointer->name) < 0) {
-            pointer->left = createNode(name, server, banTime);
+            Node* newNode = createNode(name, server, banTime);
+            if (newNode == NULL) {
+                return tree->root;
+            }
+
+            pointer->left = newNode;
             tree->n++;
             tree->q++;
 
             if (historyCount > maxDepth(tree->q)) {
                 Node* scapegoat = NULL;
-                int j = historyCount - 2;
+                int j;
 
-                for(j; j >= 0; j--) {
+                for(j = historyCount - 2; j >= 0; j--) {
 
                     if(treeSize(history[j + 1]) > (ALPHA * treeSize(history[j]))) {
                         scapegoat = history[j];
                         break;
                     }
                 }
-                Node* rebuiltNode = rebuildTree(treeSize(scapegoat), scapegoat);
 
-                if(scapegoat != NULL && j == 0) {
-                    tree->root = rebuiltNode;
+                if (scapegoat != NULL) {
+                    Node* rebuiltNode = rebuildTree(treeSize(scapegoat), scapegoat);
 
-                } else {
-                    if (history[j-1]->left = scapegoat) {
-                        history[j-1]->left = rebuiltNode;
+                    if(j == 0) {
+                        tree->root = rebuiltNode;
 
                     } else {
-                        history[j-1]->right = rebuiltNode;
+                        if (history[j-1]->left == scapegoat) {
+                            history[j-1]->left = rebuiltNode;
+
+                        } else {
+                            history[j-1]->right = rebuiltNode;
+                        }
                     }
                 }
             }
@@ -148,26 +168,39 @@ Node* insert(Tree* tree, char* name, int server, time_t banTime) {
             pointer = pointer->right;
 
         } else if(pointer->right == NULL && strcmp(name, pointer->name)> 0) {
-            pointer->right = createNode(name, server, banTime);
+            Node* newNode = createNode(name, server, banTime);
+            if (newNode == NULL) {
+                return tree->root;
+            }
+            pointer->right = newNode;
             tree->n++;
             tree->q++;
+
             if (historyCount > maxDepth(tree->q)) {
                 Node* scapegoat = NULL;
-                int j = historyCount - 2;
-                for(j; j >= 0; j--) {
+                int j;
+
+                for(j = historyCount - 2; j >= 0; j--) {
+
                     if(treeSize(history[j + 1]) > (ALPHA * treeSize(history[j]))) {
                         scapegoat = history[j];
                         break;
                     }
                 }
-                Node* rebuiltNode = rebuildTree(treeSize(scapegoat), scapegoat);
-                if(scapegoat != NULL && j == 0) {
-                    tree->root = rebuiltNode;
-                } else {
-                    if (history[j-1]->left = scapegoat) {
-                        history[j-1]->left = rebuiltNode;
+
+                if (scapegoat != NULL) {
+                    Node* rebuiltNode = rebuildTree(treeSize(scapegoat), scapegoat);
+
+                    if(j == 0) {
+                        tree->root = rebuiltNode;
+
                     } else {
-                        history[j-1]->right = rebuiltNode;
+                        if (history[j-1]->left == scapegoat) {
+                            history[j-1]->left = rebuiltNode;
+
+                        } else {
+                            history[j-1]->right = rebuiltNode;
+                        }
                     }
                 }
             }
@@ -249,48 +282,51 @@ void freeTree(Tree* tree) {
     tree->q = 0;
 }
 
-int maxDepth(int q) {
-    if (q <= 1) {
-        return 0;
-    }
-    
-    return (int)floor(log(q) / log(1 / ALPHA)) + 1;
-}
-
-int main() {
-    Node* root = createNode("Bob", 0, 0);
-    Tree* tree = malloc(sizeof(Tree));
-
-    if (tree == NULL) {
-        fprintf(stderr, "Error: Failed to malloc for tree\n");
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        fprintf(stderr, "Please provide file to build tree\n");
         return EXIT_FAILURE;
     }
 
-    *tree = (Tree){root, 1, 1};
-
-    insert(tree, "Alice", 812, 0);
-    insert(tree, "Catchy", 890, 0);
-
-    printf("Tree size: %d\n", tree->n);
-
-    Node dummy = {0};
-    Node* start = flatten(root, &dummy);
-    Node* head = start;
-
-    while (start->right != NULL) {
-        printf("%s\n", start->name);
-        start = start->right;
+    FILE* fp = fopen(argv[1], "r");
+    if (!fp) {
+        fprintf(stderr, "Error: Failed to open file\n");
+        return EXIT_FAILURE;
     }
 
-    Node* dummy2 = buildTree(3, head);
+    Tree* tree = malloc(sizeof(Tree));
+    if (tree == NULL) {
+        fprintf(stderr, "Error: Failed to malloc for tree\n");
+        fclose(fp);
+        return EXIT_FAILURE;
+    }
 
-    Node* newRoot = dummy2->left;
+    *tree = (Tree){NULL, 0, 0};
 
-    printf("Root: %s\n", newRoot->name);
-    printf("Left: %s\n", newRoot->left->name);
-    printf("Right: %s\n", newRoot->right->name);
+    char name[13];
+    int server;
+    long long time;
+
+    while (fscanf(fp, "%12s %d %lld", name, &server, &time) == 3) {
+        time_t banTime = (time_t)time;
+        insert(tree, name, server, banTime);
+    }
+
+    fclose(fp);
+
+    while (scanf("%12s", name) == 1) {
+        Node* node = search(tree, name);
+
+        if (node != NULL) {
+            printf("%s was banned from %d servers. most recently on: %lld\n",
+               node->name, node->banCount, (long long)node->lastBan);
+        } else {
+            printf("%s is not currently banned from any servers.\n", name);
+        }
+    }
 
     freeTree(tree);
+    free(tree);
 
     return 0;
 }
