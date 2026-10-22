@@ -11,7 +11,7 @@ typedef struct Node {
     char name[13];
     int banCount;
     int* servers;
-    int serverCap;
+    int serverCap; // used when unique server list needs to be resized
     time_t lastBan;
     struct Node* left;
     struct Node* right;
@@ -23,6 +23,7 @@ typedef struct Tree {
     int q; // max number of nodes (not needed since no delete function?)
 } Tree;
 
+// creates a new Node with given information and returns it
 Node* createNode (char* name, int server, time_t banTime) {
     Node* node = (Node *)malloc(sizeof(Node));
     if (node == NULL) {
@@ -46,6 +47,7 @@ Node* createNode (char* name, int server, time_t banTime) {
     return node;
 }
 
+// returns the size of the tree from given node
 int treeSize(Node *u) {
     if (u == NULL) {
         return 0;
@@ -54,6 +56,8 @@ int treeSize(Node *u) {
     return 1 + treeSize(u->left) + treeSize(u->right);
 }
 
+// flattens the tree by their right pointers, appended to y which is a dummy node
+// taken from the Chapter 19 Scapegoat Trees, written by Igal Galperin and Ronald L. Rivest
 Node* flatten(Node* x, Node* y) {
     if(x == NULL) {
         return y;
@@ -63,6 +67,7 @@ Node* flatten(Node* x, Node* y) {
     return flatten(x->left, x);
 }
 
+// taken from the Chapter 19 Scapegoat Trees, written by Igal Galperin and Ronald L. Rivest
 Node* buildTree(int n, Node* x) {
     // builds a 1/2-weight-balanced tree of n nodes from a list of nodes headed by node x
     // assumed list of nodes has length at leasst n+1
@@ -79,6 +84,7 @@ Node* buildTree(int n, Node* x) {
     return s;
 }
 
+// taken from the Chapter 19 Scapegoat Trees, written by Igal Galperin and Ronald L. Rivest
 Node* rebuildTree(int n, Node* scapegoat) {
     // takes in input a pointer scapegoat to root of subtree to be rebuilt and size n of tree
     // returns root of subtree
@@ -91,6 +97,7 @@ Node* rebuildTree(int n, Node* scapegoat) {
     return w.left;
 }
 
+// returns the max depth a child subtree could be to be balanced, formula taken from Prof. Grant's slides
 int maxDepth(int q) {
     if (q <= 1) {
         return 0;
@@ -99,6 +106,9 @@ int maxDepth(int q) {
     return (int)floor(log(q) / log(1 / ALPHA) + 1);
 }
 
+// travels down the tree to find location of given name
+// if name exists, just update node in tree with new information
+// if not, insert in correct location before checking if a rebuild is needed
 Node* insert(Tree* tree, char* name, int server, time_t banTime) {
     Node* root = tree->root;
     if(root == NULL) {
@@ -113,7 +123,7 @@ Node* insert(Tree* tree, char* name, int server, time_t banTime) {
         return NULL;
     }
 
-    Node* history[1000];
+    Node* history[1000]; // fixed size array for node travel history, to reference when finding scapegoat (please never exceed 1000 nodes)
     int historyCount = 0;
 
     Node* pointer = root;
@@ -134,6 +144,7 @@ Node* insert(Tree* tree, char* name, int server, time_t banTime) {
             tree->n++;
             tree->q++;
 
+            // if unbalanced, need to rebuild
             if (historyCount > maxDepth(tree->q)) {
                 Node* scapegoat = NULL;
                 int j;
@@ -176,6 +187,7 @@ Node* insert(Tree* tree, char* name, int server, time_t banTime) {
             tree->n++;
             tree->q++;
 
+            // same logic for right child
             if (historyCount > maxDepth(tree->q)) {
                 Node* scapegoat = NULL;
                 int j;
@@ -206,6 +218,7 @@ Node* insert(Tree* tree, char* name, int server, time_t banTime) {
             }
             return tree->root;
 
+        // update node if name already exists in tree
         } else if(strcmp(name, pointer->name) == 0) {
             if(banTime > pointer->lastBan) {
                 pointer->lastBan = banTime;
@@ -237,6 +250,7 @@ Node* insert(Tree* tree, char* name, int server, time_t banTime) {
     }
 }
 
+// just searches for node and returns it if it exists
 Node* search(Tree* tree, char* name) {
     Node* root = tree->root;
     if(root == NULL) {
